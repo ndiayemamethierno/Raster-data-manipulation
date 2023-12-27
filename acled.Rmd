@@ -1,0 +1,332 @@
+---
+title: "ACLED"
+author: "Mame Thierno NDIAYE"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE
+)
+
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(leaflet)
+library(leafem)
+library(leaflet.extras)
+```
+
+## Import data
+```{r}
+chemin = here::here()
+Data <- read.csv(paste0(chemin,"/ACLED/ACLED-Western_Africa.csv"))
+```
+
+#Transforming data to spatial data
+
+```{r}
+
+data_spatial = sf::st_as_sf(Data, coords = c("longitude", "latitude"))
+class(data_spatial)
+```
+
+#Spatial representation 
+
+```{r}
+ggplot(data_spatial) +
+  aes(fill = type, colour = pays) +
+  geom_sf(size = 1.2) +
+  scale_fill_hue(direction = 1) +
+  scale_color_hue(direction = 1) 
+```
+
+#number of events by country
+
+```{r}
+#Create a dataframe for each country's number of ocurences
+data_event = as.data.frame(table(data_spatial$pays)) 
+names(data_event) <- c("NAME_0", "Nbre_event")
+#View(data_event)
+
+#Import Africa's Boundries
+africa <- sf::read_sf(paste0(chemin,"/Afrique/Africa_Boundaries.shp")) 
+
+#Filter the ACLED countries
+ACLED_sf<- africa %>%
+  filter(NAME_0 %in% c("Burkina Faso","Mauritius","Mali","Nigeria","Niger","Côte d'Ivoire","Ghana","Sierra Leone","Benin","Liberia","Togo","Guinea",               "Cape Verde","Senegal","Guinea-Bissau","Gambia"))
+data_event$NAME_0 <- as.character(data_event$NAME_0)
+data_event$NAME_0[data_event$NAME_0 == "Ivory Coast"] <- "Côte d'Ivoire"
+data_event$NAME_0[data_event$NAME_0 == "Mauritania"] <- "Mauritius"
+
+# Create a shapefile with the ACLED countries and data_event as an attribute
+ACLED_event_pays <- left_join(ACLED_sf, data_event, by = c("NAME_0" = "NAME_0"))
+
+#Spatial representation
+ggplot(ACLED_event_pays) +
+ aes(fill = Nbre_event) +
+ geom_sf(size = 1.8) +
+ scale_fill_gradient(low = "#4C9EDD", 
+ high = "#132B43") +
+ scale_color_gradient(low = "#4C9EDD", high = "#132B43") +
+ labs(fill = "Nombre d'évenement") +
+ theme_minimal()
+```
+
+#number of events by region for Senegal
+```{r}
+#Import Senegal's Boundries, ADMIN1
+Senegal_sf <- sf::read_sf(paste0(chemin,"/Sénégal/gadm41_SEN_1.shp"))
+
+```
+
+##Graphique
+
+```{r}
+#Spatial representation
+ggplot(Senegal_sf) +
+ aes(fill = NAME_1) +
+ geom_sf(size = 1.2) +
+ scale_fill_hue(direction = 1) +
+ labs(fill = "Région") +
+ theme_minimal()
+```
+
+##intersection
+
+```{r}
+#Filter Senegal in data_spatial
+Senegal_event<- data_spatial %>%
+  filter(pays %in% c("Senegal"))
+#View(Senegal_event)
+
+#Spatial representation
+ggplot(Senegal_event) +
+ aes(fill = type, colour=type) +
+ geom_sf(size = 1.2) +
+ scale_fill_hue(direction = 1) +
+ theme_minimal()
+
+
+sf::st_crs(Senegal_event) <- sf::st_crs(Senegal_sf)
+#Associate the Senegal_event and Senegal_event 
+Senegal_ass <- sf::st_join(Senegal_event, Senegal_sf)
+
+
+#Spatial representation
+Senegal_ass %>%
+ filter(!is.na(GID_1)) %>%
+ ggplot() +
+ aes(colour = NAME_1) +
+ geom_sf(size = 2.6) +
+ scale_color_hue(direction = 1) +
+ labs(color = "Région") +
+ theme_minimal()
+```
+
+##Calculate
+
+```{r}
+#Create a dataframe for each region's number of ocurences
+  Senegal_event_Region = as.data.frame(table(Senegal_ass$NAME_1)) 
+  names(Senegal_event_Region) <- c("NAME_1", "Nbre_event")
+#View(Senegal_event_Region)
+
+## Create a shapefile with the regions for Senegal countries and Senegal_event_Region as an attribute
+Senegal_event_Region <- left_join(Senegal_sf, Senegal_event_Region, by = c("NAME_1" = "NAME_1"))
+
+#Spatial representation
+ggplot(Senegal_event_Region) +
+ aes(fill = Nbre_event) +
+ geom_sf(size = 1.8) +
+ scale_fill_gradient(low = "#4C9EDD", 
+ high = "#132B43") +
+ scale_color_gradient(low = "#4C9EDD", high = "#132B43") +
+ labs(fill = "Nombre d'évenement") +
+ theme_minimal()
+```
+
+##number of events by department pour le Sénégal
+
+```{r}
+Senegal_sf_depar <- sf::read_sf(paste0(chemin,"/Sénégal/gadm41_SEN_2.shp"))
+```
+
+##Graphic
+
+```{r}
+ggplot(Senegal_sf_depar) +
+ aes(fill = NAME_2) +
+ geom_sf(size = 1.2) +
+ scale_fill_hue(direction = 1) +
+ labs(fill = "Département") +
+ theme_minimal()
+```
+
+
+##intersection
+
+```{r}
+sf::st_crs(Senegal_event) <- sf::st_crs(Senegal_sf_depar)
+
+Senegal_ass_depar <- sf::st_join(Senegal_event, Senegal_sf_depar)
+
+Senegal_ass_depar %>%
+ filter(!is.na(GID_1)) %>%
+ ggplot() +
+ aes(colour = NAME_2) +
+ geom_sf(size = 2.6) +
+ scale_color_hue(direction = 1) +
+ labs(color = "Département") +
+ theme_minimal()
+```
+
+##Calculate
+
+```{r}
+Senegal_event_depar = as.data.frame(table(Senegal_ass_depar$NAME_2)) 
+names(Senegal_event_depar) <- c("NAME_2", "Nbre_event")
+#View(Senegal_event_depar)
+
+
+Senegal_event_Region <- left_join(Senegal_sf_depar, Senegal_event_depar, by = c("NAME_2" = "NAME_2"))
+
+#Graphic
+ggplot(Senegal_event_Region) +
+ aes(fill = Nbre_event) +
+ geom_sf(size = 1.8) +
+ scale_fill_gradient(low = "#4C9EDD", 
+ high = "#132B43") +
+ scale_color_gradient(low = "#4C9EDD", high = "#132B43") +
+ labs(fill = "Nombre d'évenement") +
+ theme_minimal()
+```
+
+
+#Raster Creation 
+
+##Creation for G5 sahel
+
+```{r}
+# Filter G5 sahel
+G5_Sahel<- data_spatial %>%
+  filter(pays %in% c("Burkina Faso", "Mali", "Mauritania", "Niger"))  
+#View(G5_Sahel)
+
+ggplot(G5_Sahel) +
+  aes(fill = type, colour = pays) +
+  geom_sf(size = 1.2) +
+  scale_fill_hue(direction = 1) +
+  scale_color_hue(direction = 1)
+```
+
+##number of events (G5 Sahel)
+
+```{r}
+G5_Sahel_event = as.data.frame(table(G5_Sahel$pays)) 
+names(G5_Sahel_event) <- c("NAME_0", "Nbre_event")
+#View(G5_Sahel_event)
+
+G5_Sahel_sf<- africa %>%
+  filter(NAME_0 %in% c("Burkina Faso","Mauritius","Mali","Niger"))
+
+G5_Sahel_event$NAME_0 <- as.character(G5_Sahel_event$NAME_0)
+G5_Sahel_event$NAME_0[G5_Sahel_event$NAME_0 == "Mauritania"] <- "Mauritius"
+
+G5_Sahel_pays <- left_join(G5_Sahel_sf, G5_Sahel_event, by = c("NAME_0" = "NAME_0"))
+
+ggplot(G5_Sahel_pays) +
+ aes(fill = Nbre_event) +
+ geom_sf(size = 1.8) +
+ scale_fill_gradient(low = "#4C9EDD", 
+ high = "#132B43") +
+ scale_color_gradient(low = "#4C9EDD", high = "#132B43") +
+ labs(fill = "Nombre d'évenement") +
+ theme_minimal()
+```
+
+
+##raster creation 
+
+```{r}
+#create a 10km*10km resolution raster
+ext <- raster::extent(sf::st_bbox(G5_Sahel)) #extent
+
+res <- 0.09 # resolution 10km*10km
+raster <- raster::raster(ext=ext, resolution=res)
+sf::st_crs(G5_Sahel)<- raster::projection(raster)
+
+#Number of events for each 10km*10km
+G5_Sahel_Raster <- raster::rasterize(G5_Sahel,raster,field=1, fun="sum")
+
+#Save with GTIFF format
+raster::writeRaster(G5_Sahel_Raster, filename = paste0(chemin,"/Raster/G5_Sahel_nbre_event_1.tif"), format = "GTiff", overwrite = TRUE)
+
+#Representation
+
+pal <- colorNumeric(RColorBrewer::brewer.pal(3, "Reds"), raster::values(G5_Sahel_Raster),
+  na.color = "transparent")
+
+leaflet() %>%
+  addTiles() %>%
+  addRasterImage(G5_Sahel_Raster, opacity = 0.7,colors = pal) %>%
+addMouseCoordinates()%>%  # Ajout des coordonnées GPS du pointeur de la souris
+addResetMapButton()%>%  # Recentrer la carte
+addFullscreenControl()%>%  #ajout du basculement en mode plein écran
+addSearchOSM()%>%  #ajout de la barre de recherche Openstreetmap
+addMeasure(position = "topleft",              #mesure des distances
+           primaryLengthUnit = "kilometers",
+           secondaryAreaUnit = FALSE)%>% 
+addScaleBar(       #ajout de l'échelle
+  position = "bottomleft" 
+)%>%
+addLegend(pal = pal, values = raster::values(G5_Sahel_Raster),
+    title = "Nombre d'événement")
+```
+#Nouvelle création raster
+
+```{r}
+#create a 10km*10km resolution raster
+ext_1 <- raster::extent(sf::st_bbox(G5_Sahel)) # extent 
+res_1 <- 0.09
+raster_1 <- raster::raster(ext=ext_1, resolution=res_1)
+sf::st_crs(G5_Sahel)<- raster::projection(raster_1)
+
+
+G5_Sahel_Raster_1<-raster_1
+#Recoding pixel values
+G5_Sahel_Raster_1[(G5_Sahel_Raster >= 0 & G5_Sahel_Raster < 5)] <- 1
+G5_Sahel_Raster_1[(G5_Sahel_Raster >= 5 & G5_Sahel_Raster < 10)] <- 2
+G5_Sahel_Raster_1[G5_Sahel_Raster >= 10] <- 3
+
+raster::writeRaster(G5_Sahel_Raster_1, filename = paste0(chemin,"/Raster/G5_Sahel_1_nbre_event_1.tif"), format = "GTiff", overwrite = TRUE)
+
+
+#Representation
+
+pal <- colorNumeric(RColorBrewer::brewer.pal(3,"Reds"), raster::values(G5_Sahel_Raster_1),
+  na.color = "transparent")
+
+leaflet() %>%
+  addTiles() %>%
+  addRasterImage(G5_Sahel_Raster_1, opacity = 0.7,colors = pal) %>%
+addMouseCoordinates()%>%  # Ajout des coordonnées GPS du pointeur de la souris
+addResetMapButton()%>%  # Recentrer la carte
+addFullscreenControl()%>%  #ajout du basculement en mode plein écran
+addSearchOSM()%>%  #ajout de la barre de recherche Openstreetmap
+addMeasure(position = "topleft",              #mesure des distances
+           primaryLengthUnit = "kilometers",
+           secondaryAreaUnit = FALSE)%>% 
+addScaleBar(       #ajout de l'échelle
+  position = "bottomleft" 
+)%>%
+ addLegend(pal = pal, values = raster::values(G5_Sahel_Raster_1),
+    title = "Nombre d'événement")
+
+```
+
